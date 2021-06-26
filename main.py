@@ -25,7 +25,5 @@ if __name__ == "__main__":
     scheduler = BackgroundScheduler()
     job = scheduler.add_job(bestbuy_gpu_webscraper, 'interval', seconds=2*60)
     scheduler.start()
-
-    bestbuy_gpu_webscraper()
     
     asyncio.run(serve(app, Config()))

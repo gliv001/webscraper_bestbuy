@@ -1,6 +1,8 @@
 from gpu import GPU
-from selenium.webdriver import Chrome
 from bs4 import BeautifulSoup
+from time import time
+from pyppeteer import launch
+import asyncio
 
 def createGPUCSV(filepath):
     with open(filepath, 'w') as f:
@@ -23,17 +25,25 @@ def getPageList(html):
     return page_list
 
 def getLastPage(page_list):
-    last_page = 1
+    last_page_num = 1
     for page in page_list:
-        if page["page_number"] > last_page:
-            last_page = page["page_number"]
+        if page["page_number"] > last_page_num:
+            last_page_num = page["page_number"]
+            last_page = page
     return last_page
 
-def scrapePage(driver, page_url, create_html_file = False):
-    driver.get(page_url)
-    page_html = driver.page_source
-    
-    soup = BeautifulSoup(page_html, "html.parser")
+async def scrapePage(page_url, create_html_file = False):
+    browser = await launch()
+    page = await browser.newPage()
+    start_time = time()
+    await page.goto(page_url,{"timeout": 0, "waitUntil": "domcontentloaded"})
+    end_time = time()
+    elapsed_time = end_time - start_time
+    print(f"url:{page_url} elapsed time: {elapsed_time}")
+    content = await page.content()
+    await browser.close()
+
+    soup = BeautifulSoup(content, "html.parser")
 
     if create_html_file == True:
         with open("output.html", "w") as f:
@@ -69,25 +79,34 @@ def scrapePage(driver, page_url, create_html_file = False):
             
             gpu_list.append(GPU(item_name, item_model, item_sku, item_price, available))
         except Exception as e:
-            print(e)
+            print(f"Error attempting to parse: {e}")
             pass # skip it if data can't be scraped
     return gpu_list, page_list
 
-def bestbuy_gpu_webscraper():
+async def bestbuy_gpu_webscraper():
     page_url = "https://www.bestbuy.com/site/searchpage.jsp?st=gpu+cards"
     createGPUCSV("output.csv")
 
-    driver = Chrome(executable_path="./chromedriver")
-    gpu_list, page_list = scrapePage(driver, page_url, True)
+    gpu_list, page_list = await scrapePage(page_url, True)
     writeGPUToCSV("output.csv", gpu_list)
     last_page = getLastPage(page_list)
-    for page_num in range(2, last_page+1):
-        page = next((p for p in page_list if p["page_number"] == page_num), None)
-        next_url = page["link"]
-        gpu_list, page_list = scrapePage(driver, next_url)
+    
+    futures = []
+    for page_num in range(2, last_page["page_number"]+1):
+        next_url = last_page["link"].replace(str(last_page["page_number"]), str(page_num))
+        futures.append(asyncio.create_task(scrapePage(next_url)))
+
+    results = await asyncio.gather(*futures)
+    for result in results:
+        gpu_list = result[0]
         writeGPUToCSV("output.csv", gpu_list)
     
-    driver.close()
 
 if __name__ == "__main__":
-    bestbuy_gpu_webscraper()
+    start = time()
+    asyncio.get_event_loop().run_until_complete(bestbuy_gpu_webscraper())
+    end = time()
+    print(f"total elapsed time {end-start}")
+    # while True:
+    #     sleep(minutes*60)
+    #     asyncio.get_event_loop().run_until_complete(bestbuy_gpu_webscraper())
