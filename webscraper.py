@@ -1,8 +1,14 @@
+import os
 from gpu import GPU
 from selenium.webdriver import Chrome
+from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
+from time import time
+from datetime import datetime
 
 def createGPUCSV(filepath):
+    if not os.path.exists(os.path.dirname(filepath)):
+        os.makedirs(os.path.dirname(filepath))
     with open(filepath, 'w') as f:
         f.write(f"{GPU.getHeaderCSV()}\n")
 
@@ -29,15 +35,14 @@ def getLastPage(page_list):
             last_page = page["page_number"]
     return last_page
 
-def scrapePage(driver, page_url, create_html_file = False):
+def scrapePage(driver, page_url):
+    start = time()
     driver.get(page_url)
+    end = time()
+    print(f"url:{page_url} elapsed time:{end-start}")
     page_html = driver.page_source
     
     soup = BeautifulSoup(page_html, "html.parser")
-
-    if create_html_file == True:
-        with open("output.html", "w") as f:
-            f.write(soup.prettify())
 
     page_list = getPageList(soup)
 
@@ -69,25 +74,39 @@ def scrapePage(driver, page_url, create_html_file = False):
             
             gpu_list.append(GPU(item_name, item_model, item_sku, item_price, available))
         except Exception as e:
-            print(e)
-            pass # skip it if data can't be scraped
+            if not os.path.exists("./logs/errors"):
+                os.makedirs("./logs/errors/")
+            timestamp = datetime.strftime(datetime.now(), "%Y%m%d_%H%M%S")
+            filepath = f"./logs/errors/li_error_{timestamp}.html"
+            with open(filepath, "w") as f:
+                f.write(li.text)
+            print(f'Error parsing line item, saved at [{filepath}], skipping.. {e}')
     return gpu_list, page_list
 
 def bestbuy_gpu_webscraper():
     page_url = "https://www.bestbuy.com/site/searchpage.jsp?st=gpu+cards"
-    createGPUCSV("output.csv")
+    createGPUCSV("./output/output.csv")
 
-    driver = Chrome(executable_path="./chromedriver")
-    gpu_list, page_list = scrapePage(driver, page_url, True)
-    writeGPUToCSV("output.csv", gpu_list)
+    options = Options()
+    user_agent = 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.2 (KHTML, like Gecko) Chrome/22.0.1216.0 Safari/537.2'
+    options.add_argument(f'user-agent={user_agent}')
+    options.add_argument("--no-proxy-server='direct://'")
+    options.add_argument("--proxy-bypass-list=*")
+    options.add_argument("--headless")
+    driver = Chrome(executable_path="./chromedriver", options=options)
+    gpu_list, page_list = scrapePage(driver, page_url)
+    writeGPUToCSV("./output/output.csv", gpu_list)
     last_page = getLastPage(page_list)
     for page_num in range(2, last_page+1):
         page = next((p for p in page_list if p["page_number"] == page_num), None)
         next_url = page["link"]
         gpu_list, page_list = scrapePage(driver, next_url)
-        writeGPUToCSV("output.csv", gpu_list)
+        writeGPUToCSV("./output/output.csv", gpu_list)
     
     driver.close()
 
 if __name__ == "__main__":
+    start = time()
     bestbuy_gpu_webscraper()
+    end = time()
+    print(f"total elapsed time:{end-start}")
