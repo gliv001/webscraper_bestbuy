@@ -5,6 +5,8 @@ from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 from time import time
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, wait
+import yaml
 
 def createGPUCSV(filepath):
     if not os.path.exists(os.path.dirname(filepath)):
@@ -35,16 +37,24 @@ def getLastPage(page_list):
             last_page = page["page_number"]
     return last_page
 
-def scrapePage(driver, page_url):
+def load_page(page_url):
     start = time()
+    driver = create_driver()
     driver.get(page_url)
     end = time()
     print(f"url:{page_url} elapsed time:{end-start}")
     page_html = driver.page_source
-    
-    soup = BeautifulSoup(page_html, "html.parser")
+    driver.close()
+    return page_html
 
-    page_list = getPageList(soup)
+def scrapePageNumbers(page_url):
+    page_html = load_page(page_url)
+    soup = BeautifulSoup(page_html, "html.parser")
+    return getPageList(soup)
+
+def scrapePage(page_url):
+    page_html = load_page(page_url)
+    soup = BeautifulSoup(page_html, "html.parser")
 
     div_main = soup.find('div', {"id":"main-results"})
         
@@ -74,19 +84,18 @@ def scrapePage(driver, page_url):
             
             gpu_list.append(GPU(item_name, item_model, item_sku, item_price, available))
         except Exception as e:
-            if not os.path.exists("./logs/errors"):
-                os.makedirs("./logs/errors/")
+            with open("config.yml", "r") as yml:
+                cfg = yaml.safe_load(yml)
+            if not os.path.exists(cfg["output"]["logs_dir"]):
+                os.makedirs(cfg["output"]["logs_dir"])
             timestamp = datetime.strftime(datetime.now(), "%Y%m%d_%H%M%S")
-            filepath = f"./logs/errors/li_error_{timestamp}.html"
+            filepath = os.path.join(cfg["output"]["logs_dir"], f"li_error_{timestamp}.html")
             with open(filepath, "w") as f:
                 f.write(li.text)
             print(f'Error parsing line item, saved at [{filepath}], skipping.. {e}')
-    return gpu_list, page_list
+    return gpu_list
 
-def bestbuy_gpu_webscraper():
-    page_url = "https://www.bestbuy.com/site/searchpage.jsp?st=gpu+cards"
-    createGPUCSV("./output/output.csv")
-
+def create_driver():
     options = Options()
     user_agent = 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.2 (KHTML, like Gecko) Chrome/22.0.1216.0 Safari/537.2'
     options.add_argument(f'user-agent={user_agent}')
@@ -94,16 +103,30 @@ def bestbuy_gpu_webscraper():
     options.add_argument("--proxy-bypass-list=*")
     options.add_argument("--headless")
     driver = Chrome(executable_path="./chromedriver", options=options)
-    gpu_list, page_list = scrapePage(driver, page_url)
-    writeGPUToCSV("./output/output.csv", gpu_list)
-    last_page = getLastPage(page_list)
-    for page_num in range(2, last_page+1):
-        page = next((p for p in page_list if p["page_number"] == page_num), None)
-        next_url = page["link"]
-        gpu_list, page_list = scrapePage(driver, next_url)
-        writeGPUToCSV("./output/output.csv", gpu_list)
+    return driver
+
+def bestbuy_gpu_webscraper():
+    with open("config.yml", "r") as yml:
+        cfg = yaml.safe_load(yml)
     
-    driver.close()
+    page_url = cfg["input"]["url"]
+    createGPUCSV("./output/output.csv")
+
+    page_list = scrapePageNumbers(page_url)
+
+    last_page = getLastPage(page_list)
+    
+    futures = []
+    with ThreadPoolExecutor() as executor:
+        futures.append(executor.submit(scrapePage,page_url))
+        for n in range(2, last_page+1):
+            next_url = cfg["input"]["url_by_page"].format(n=n)
+            futures.append(executor.submit(scrapePage,next_url))
+
+    wait(futures)
+    for future in futures:
+        writeGPUToCSV(cfg["output"]["csv"], future.result())
+    
 
 if __name__ == "__main__":
     start = time()

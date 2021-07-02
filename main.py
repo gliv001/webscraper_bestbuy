@@ -5,14 +5,18 @@ import asyncio
 from hypercorn.asyncio import serve
 from hypercorn.config import Config
 import csv
+import yaml
 
 app = FastAPI()
+
+with open("config.yml", "r") as yml:
+    cfg = yaml.safe_load(yml)
 
 @app.get('/')
 @app.get('/GetAvailableGPU')
 def availableGPUs():
     available_list = []
-    with open("output.csv") as f:
+    with open(cfg["output"]["csv"], "r") as f:
         reader = csv.DictReader(f)
         for row in reader:
             if row["Available"] == "True":
