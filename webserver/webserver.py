@@ -1,12 +1,11 @@
 from fastapi import FastAPI
-from webserver.models import (
+from db import (
     GpuAvailability,
     SubscrbersToUrl,
     Subscribers,
     Urls,
     session as db,
 )
-import csv
 import yaml
 
 app = FastAPI()

@@ -2,7 +2,7 @@ import os
 from decimal import Decimal
 from re import sub
 from webscraper.gpu import GPU
-from webscraper.models import GpuAvailability, session as db
+from db import GpuAvailability, session as db
 from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
@@ -172,6 +172,10 @@ def bestbuy_gpu_webscraper():
     for future in futures:
         writeGPUToDB(future.result())
     print("webscraper finished!")
+
+
+def exit_webscraper_safely():
+    db.close()
 
 
 if __name__ == "__main__":

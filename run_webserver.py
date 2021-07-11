@@ -1,4 +1,4 @@
-from webserver.webserver import app
+from webserver import app
 from hypercorn.asyncio import serve
 from hypercorn.config import Config
 import asyncio
