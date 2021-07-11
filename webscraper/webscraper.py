@@ -2,7 +2,7 @@ import os
 from decimal import Decimal
 from re import sub
 from webscraper.gpu import GPU
-from db import GpuAvailability, session as db
+from db import GpuAvailability, DBSession
 from selenium.webdriver import Chrome
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
@@ -10,12 +10,6 @@ from time import time
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, wait
 import yaml
-
-# def createGPUCSV(filepath):
-#     if not os.path.exists(os.path.dirname(filepath)):
-#         os.makedirs(os.path.dirname(filepath))
-#     with open(filepath, 'w') as f:
-#         f.write(f"{GPU.getHeaderCSV()}\n")
 
 
 def writeGPUToCSV(filepath, gpu_list: list[GPU]):
@@ -42,8 +36,9 @@ def writeGPUToDB(gpu_list: list[GPU]):
         )
         db_gpu_buffer.append(db_gpu)
     try:
-        db.add_all(db_gpu_buffer)
-        db.commit()
+        with DBSession() as db:
+            db.add_all(db_gpu_buffer)
+            db.commit()
     except Exception as e:
         print(f"failed to update gpu list to db, error: {e}")
 
@@ -119,17 +114,18 @@ def scrapePage(page_url):
 
             gpu_list.append(GPU(item_name, item_model, item_sku, item_price, available))
         except Exception as e:
-            with open("config.yml", "r") as yml:
-                cfg = yaml.safe_load(yml)
-            if not os.path.exists(cfg["output"]["logs_dir"]):
-                os.makedirs(cfg["output"]["logs_dir"])
-            timestamp = datetime.strftime(datetime.now(), "%Y%m%d_%H%M%S")
-            filepath = os.path.join(
-                cfg["output"]["logs_dir"], f"li_error_{timestamp}.html"
-            )
-            with open(filepath, "w") as f:
-                f.write(li.text)
-            print(f"Error parsing line item, saved at [{filepath}], skipping.. {e}")
+            # with open("config.yml", "r") as yml:
+            #     cfg = yaml.safe_load(yml)
+            # if not os.path.exists(cfg["output"]["logs_dir"]):
+            #     os.makedirs(cfg["output"]["logs_dir"])
+            # timestamp = datetime.strftime(datetime.now(), "%Y%m%d_%H%M%S")
+            # filepath = os.path.join(
+            #     cfg["output"]["logs_dir"], f"li_error_{timestamp}.html"
+            # )
+            # with open(filepath, "w") as f:
+            #     f.write(li.text)
+            # print(f"Error parsing line item, saved at [{filepath}], skipping.. {e}")
+            print("Error parsing a line item")
     return gpu_list
 
 
@@ -165,17 +161,14 @@ def bestbuy_gpu_webscraper():
 
     wait(futures)
     try:
-        db.execute("truncate table gpu_availability")
-        db.commit()
+        with DBSession() as db:
+            db.execute("truncate table gpu_availability")
+            db.commit()
     except Exception as e:
         print(f"failed to remove old gpu list from db, error: {e}")
     for future in futures:
         writeGPUToDB(future.result())
     print("webscraper finished!")
-
-
-def exit_webscraper_safely():
-    db.close()
 
 
 if __name__ == "__main__":

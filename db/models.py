@@ -43,7 +43,7 @@ class Urls(Base):
     comment = Column(String(256))
 
 
-class SubscrbersToUrl(Base):
+class SubscribersToUrl(Base):
     __tablename__ = "subscribers_to_url"
     id = Column(Integer, primary_key=True)
     subscriber_id = Column(Integer, ForeignKey("subscribers.id"))

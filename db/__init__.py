@@ -1,2 +1,2 @@
-from db.models import GpuAvailability, Subscribers, Urls, SubscrbersToUrl
-from db.connection import session
+from db.models import GpuAvailability, Subscribers, Urls, SubscribersToUrl
+from db.connection import session, DBSession
