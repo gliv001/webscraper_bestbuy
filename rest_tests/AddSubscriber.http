@@ -1,0 +1,21 @@
+POST http://127.0.0.1:8000/AddSubscriber HTTP/1.1
+content-type: application/json
+
+{
+    "name": "test",
+    "email": "test@gmail.com"
+}
+
+# Response
+# 
+# HTTP/1.1 200 
+# content-length: 29
+# content-type: application/json
+# date: Mon, 12 Jul 2021 01:51:10 GMT
+# server: hypercorn-h11
+# Connection: close
+
+# {
+#   "status": "success",
+#   "msg": ""
+# }
